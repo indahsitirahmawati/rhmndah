@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kuis Bahasa Indonesia</title>
+    <!-- Memuat Tailwind CSS untuk styling modern dan responsif -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7fafc;
+        }
+        .quiz-container {
+            max-width: 768px;
+        }
+        .question-card {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .option-button {
+            transition: all 0.2s;
+        }
+        .option-button:hover:not(.disabled):not(.correct):not(.incorrect) {
+            background-color: #e2e8f0;
+            transform: translateY(-2px);
+        }
+        /* Style untuk jawaban yang dipilih (belum divalidasi) */
+        .option-button.selected {
+            border-color: #4f46e5;
+            background-color: #e0e7ff;
+        }
+        /* Style untuk jawaban benar */
+        .option-button.correct {
+            background-color: #d1fae5; /* Green 100 */
+            border-color: #10b981; /* Green 500 */
+            color: #065f46; /* Green 800 */
+            font-weight: 600;
+        }
+        /* Style untuk jawaban salah */
+        .option-button.incorrect {
+            background-color: #fee2e2; /* Red 100 */
+            border-color: #ef4444; /* Red 500 */
+            color: #991b1b; /* Red 800 */
+            font-weight: 600;
+        }
+        .disabled {
+            pointer-events: none;
+            opacity: 0.8;
+        }
+        .progress-bar-fill {
+            transition: width 0.4s ease-in-out;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+
+    <div id="quiz-app" class="quiz-container mx-auto">
+        <!-- Judul dan Deskripsi -->
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-extrabold text-gray-900 mb-2">Uji Kemampuan Bahasa Indonesia</h1>
+            <p class="text-gray-600 text-lg">Asah pengetahuan Anda tentang tata bahasa, kosakata, dan ejaan!</p>
+        </header>
+
+        <!-- Area Kuis -->
+        <div id="quiz-area">
+            <!-- Tampilan Kuis (akan diisi oleh JS) -->
+        </div>
+
+        <!-- Area Hasil (Tersembunyi Awalnya) -->
+        <div id="results-area" class="mt-10 p-8 bg-white rounded-xl question-card hidden">
+            <h2 class="text-3xl font-bold text-center text-indigo-700 mb-4">Hasil Kuis Anda</h2>
+            <p id="score-text" class="text-2xl text-center font-semibold mb-6 text-gray-800"></p>
+            <p id="feedback-text" class="text-lg text-center text-gray-600 mb-8"></p>
+
+            <div class="flex justify-center">
+                <button id="restart-button" class="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition duration-200">
+                    Coba Lagi
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Array berisi pertanyaan kuis
+        const questions = [
+            {
+                question: "Pilihlah kata baku yang tepat:",
+                options: ["apotik", "apotic", "apotek", "aphotik"],
+                answer: "apotek"
+            },
+            {
+                question: "Mana kalimat yang menggunakan tanda baca koma (,) dengan benar?",
+                options: [
+                    "Saya suka, nasi goreng, sate, dan bakso.",
+                    "Saya suka nasi goreng, sate, dan bakso.",
+                    "Saya suka nasi goreng sate, dan bakso.",
+                    "Saya suka nasi goreng, sate dan bakso."
+                ],
+                answer: "Saya suka nasi goreng, sate, dan bakso."
+            },
+            {
+                question: "Apa singkatan dari KBBI?",
+                options: ["Kamus Besar Bahasa Internasional", "Kamus Besar Budaya Indonesia", "Kamus Besar Bahasa Indonesia", "Kamus Bahasa Baku Indonesia"],
+                answer: "Kamus Besar Bahasa Indonesia"
+            },
+            {
+                question: "Kata serapan dari bahasa Inggris 'Technology' adalah...",
+                options: ["Tekhnologi", "Technologi", "Teknologi", "Tecnologi"],
+                answer: "Teknologi"
+            },
+            {
+                question: "Imbuhan yang menunjukkan makna 'paling' adalah:",
+                options: ["se-", "ter-", "-an", "ber-"],
+                answer: "ter-"
+            }
+        ];
+
+        let currentQuestionIndex = 0;
+        let score = 0;
+        let selectedOption = null;
+
+        const quizArea = document.getElementById('quiz-area');
+        const resultsArea = document.getElementById('results-area');
+        const scoreText = document.getElementById('score-text');
+        const feedbackText = document.getElementById('feedback-text');
+        const restartButton = document.getElementById('restart-button');
+
+        // Fungsi untuk mengacak urutan pertanyaan (opsional)
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        // Fungsi untuk menampilkan pertanyaan saat ini
+        function displayQuestion() {
+            if (currentQuestionIndex >= questions.length) {
+                showResults();
+                return;
+            }
+
+            const qData = questions[currentQuestionIndex];
+            
+            // Mengacak opsi jawaban untuk menghindari urutan yang sama
+            const shuffledOptions = [...qData.options];
+            shuffleArray(shuffledOptions); 
+
+            // Hapus konten sebelumnya
+            quizArea.innerHTML = '';
+            selectedOption = null;
+
+            // Buat struktur HTML untuk pertanyaan
+            const questionCard = document.createElement('div');
+            questionCard.className = 'question-card bg-white p-6 sm:p-8 rounded-xl';
+            questionCard.innerHTML = `
+                <div class="mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-xl font-bold text-indigo-600">Pertanyaan ${currentQuestionIndex + 1} dari ${questions.length}</span>
+                        <span id="score-display" class="text-xl font-bold text-gray-700">Skor: ${score}</span>
+                    </div>
+                    <!-- Progress Bar -->
+                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                        <div class="progress-bar-fill bg-indigo-500 h-2.5 rounded-full" style="width: ${((currentQuestionIndex) / questions.length) * 100}%"></div>
+                    </div>
+                </div>
+
+                <h2 class="text-2xl font-semibold mb-6 text-gray-800">${qData.question}</h2>
+                <div id="options-container" class="space-y-4">
+                    <!-- Opsi akan diinject di sini -->
+                </div>
+                
+                <div class="mt-8 flex justify-between items-center">
+                    <button id="submit-button" class="px-6 py-3 bg-indigo-500 text-white font-semibold rounded-lg hover:bg-indigo-600 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        Kirim Jawaban
+                    </button>
+                    <div id="feedback-message" class="text-lg font-medium"></div>
+                </div>
+            `;
+            quizArea.appendChild(questionCard);
+
+            const optionsContainer = document.getElementById('options-container');
+            const submitButton = document.getElementById('submit-button');
+
+            // Tambahkan tombol opsi
+            shuffledOptions.forEach(option => {
+                const button = document.createElement('button');
+                button.className = 'option-button w-full text-left p-4 border-2 border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition duration-200';
+                button.textContent = option;
+                button.onclick = () => selectOption(button, option);
+                optionsContainer.appendChild(button);
+            });
+
+            // Event listener untuk tombol kirim
+            submitButton.addEventListener('click', handleSubmit);
+        }
+
+        // Fungsi untuk menangani pemilihan opsi
+        function selectOption(button, option) {
+            // Hapus status 'selected' dari semua tombol
+            document.querySelectorAll('.option-button').forEach(btn => {
+                btn.classList.remove('selected');
+                btn.classList.remove('disabled'); // Pastikan bisa dipilih ulang
+            });
+
+            // Tandai tombol yang baru dipilih
+            button.classList.add('selected');
+            selectedOption = option;
+
+            // Aktifkan tombol kirim
+            document.getElementById('submit-button').disabled = false;
+        }
+
+        // Fungsi untuk menangani pengiriman jawaban
+        function handleSubmit() {
+            if (selectedOption === null) return; // Seharusnya sudah dinonaktifkan
+
+            const qData = questions[currentQuestionIndex];
+            const isCorrect = selectedOption === qData.answer;
+            const submitButton = document.getElementById('submit-button');
+            const feedbackMessage = document.getElementById('feedback-message');
+            const optionsContainer = document.getElementById('options-container');
+
+            // Nonaktifkan tombol kirim dan opsi
+            submitButton.disabled = true;
+            submitButton.textContent = 'Jawaban Terkunci';
+
+            // Tandai jawaban yang benar dan yang dipilih
+            optionsContainer.querySelectorAll('.option-button').forEach(btn => {
+                const isSelected = btn.textContent === selectedOption;
+                const isTheAnswer = btn.textContent === qData.answer;
+
+                btn.classList.add('disabled');
+                btn.classList.remove('selected');
+
+                if (isTheAnswer) {
+                    btn.classList.add('correct');
+                } else if (isSelected) {
+                    btn.classList.add('incorrect');
+                }
+            });
+
+            // Berikan skor dan pesan umpan balik
+            if (isCorrect) {
+                score++;
+                feedbackMessage.className = 'text-lg font-medium text-green-600';
+                feedbackMessage.textContent = '👍 Benar! Kerja bagus!';
+            } else {
+                feedbackMessage.className = 'text-lg font-medium text-red-600';
+                feedbackMessage.textContent = '❌ Salah. Jawaban yang benar sudah ditandai hijau.';
+            }
+
+            // Update skor di UI
+            document.getElementById('score-display').textContent = `Skor: ${score}`;
+
+            // Ganti tombol kirim menjadi tombol Lanjut
+            submitButton.textContent = 'Lanjut ke Pertanyaan Berikutnya';
+            submitButton.classList.remove('bg-indigo-500', 'hover:bg-indigo-600');
+            submitButton.classList.add('bg-green-600', 'hover:bg-green-700');
+            submitButton.disabled = false;
+            
+            submitButton.onclick = () => {
+                currentQuestionIndex++;
+                displayQuestion();
+            };
+        }
+
+        // Fungsi untuk menampilkan hasil akhir
+        function showResults() {
+            quizArea.classList.add('hidden');
+            resultsArea.classList.remove('hidden');
+
+            const percentage = (score / questions.length) * 100;
+            let feedback = '';
+
+            if (percentage === 100) {
+                feedback = "Sempurna! Pengetahuan Bahasa Indonesia Anda luar biasa. Pertahankan!";
+            } else if (percentage >= 80) {
+                feedback = "Hebat! Anda sangat mahir dalam Bahasa Indonesia. Sedikit lagi menuju sempurna!";
+            } else if (percentage >= 50) {
+                feedback = "Bagus! Anda sudah menguasai dasar-dasar. Coba ulangi untuk menguatkan pemahaman.";
+            } else {
+                feedback = "Jangan menyerah! Ada beberapa hal yang perlu dipelajari lagi. Semangat mencoba kembali!";
+            }
+
+            scoreText.textContent = `Anda berhasil menjawab ${score} dari ${questions.length} pertanyaan (${percentage.toFixed(0)}%).`;
+            feedbackText.textContent = feedback;
+        }
+
+        // Fungsi untuk memulai ulang kuis
+        function restartQuiz() {
+            currentQuestionIndex = 0;
+            score = 0;
+            selectedOption = null;
+            resultsArea.classList.add('hidden');
+            quizArea.classList.remove('hidden');
+            displayQuestion();
+        }
+
+        // Event listener untuk tombol coba lagi
+        restartButton.addEventListener('click', restartQuiz);
+
+        // Inisialisasi kuis saat halaman dimuat
+        document.addEventListener('DOMContentLoaded', () => {
+             // Opsional: acak urutan pertanyaan di awal
+            shuffleArray(questions);
+            displayQuestion();
+        });
+
+    </script>
+</body>
+</html>
